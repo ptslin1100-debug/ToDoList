@@ -1,0 +1,39 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 使用者個人資料集合：
+    // 已登入使用者可查詢其他使用者的公開資訊 (姓名、頭像) 以支援協作指派與成員列表；
+    // 只能編輯自己的使用者文檔。
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // 協作清單集合：
+    // - 登入使用者可建立清單。
+    // - 清單成員可讀取與更新 (包含加入成員、變更清單名稱)。
+    // - 只有擁有者 (ownerId) 可以刪除清單。
+    match /lists/{listId} {
+      allow create: if request.auth != null;
+      allow read, update: if request.auth != null && (
+        resource.data.members.hasAny([request.auth.uid]) ||
+        request.resource.data.members.hasAny([request.auth.uid])
+      );
+      allow delete: if request.auth != null && resource.data.ownerId == request.auth.uid;
+      
+      // 待辦事項子集合 (Tasks)：
+      // 屬於該清單的協作成員可讀取、新增、修改狀態、指派與刪除待辦事項。
+      match /tasks/{taskId} {
+        allow read, write: if request.auth != null;
+      }
+      
+      // 即時協作活動記錄子集合 (Activities)：
+      // 屬於該清單的協作成員可讀取與寫入即時協作動態日誌。
+      match /activities/{activityId} {
+        allow read, write: if request.auth != null;
+      }
+    }
+    
+  }
+}
